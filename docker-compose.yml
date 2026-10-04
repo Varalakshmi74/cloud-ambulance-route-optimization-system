@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # Cloud Database Service (PostgreSQL)
+  postgres_db:
+    image: postgres:16-alpine
+    container_name: emergency_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: cloud_admin
+      POSTGRES_PASSWORD: SecretPassword2026!
+      POSTGRES_DB: emergency_cloud_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cloud_admin -d emergency_cloud_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Backend REST API & Real-time Telemetry (FastAPI)
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: emergency_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql://cloud_admin:SecretPassword2026!@postgres_db:5432/emergency_cloud_db
+      - AWS_REGION=us-east-1
+      - AWS_S3_BUCKET=ambulance-telemetry-storage-cloud
+      - OSRM_ROUTING_URL=https://router.project-osrm.org
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+
+  # Frontend Web UI (React + Vite SPA)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: emergency_frontend
+    restart: always
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:
